@@ -1,0 +1,3 @@
+From the UDACITY course in DeepLearningl. The original code can be downloaded from here: git clone https://github.com/udacity/deep-learning-v2-pytorch.git
+
+Note: When running GradientDescent.ipynb, I would get `ModuleNotFoundError: No module named 'matplotlib'`, despite the fact that matplotlib is already installed. This happens because the Python environment that Jupyter is using is different from the one where matplotlib works.
