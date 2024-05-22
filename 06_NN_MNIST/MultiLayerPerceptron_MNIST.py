@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from torchvision import datasets
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+from torch.utils.data.sampler import SubsetRandomSampler
+
 
 
 from six.moves import urllib
@@ -15,6 +17,8 @@ urllib.request.install_opener(opener)
 
 num_workers = 0                     # number of subprocesses to use for data loading
 batch_size = 20                     # how many samples per batch to load
+valid_size = 0.2                    # percentage of training set to use as validation
+
 transform = transforms.ToTensor()   # convert data to torch.FloatTensor
 
 # choose the training and test datasets
@@ -23,11 +27,23 @@ train_data = datasets.MNIST(root='data', train=True,
 test_data = datasets.MNIST(root='data', train=False,
                                   download=True, transform=transform)
 
-# prepare data loaders
-train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size,
-    num_workers=num_workers)
-test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, 
-    num_workers=num_workers)
+# obtain training indices that will be used for validation
+num_train = len(train_data)
+indices = list(range(num_train))
+np.random.shuffle(indices)
+split = int(np.floor(valid_size * num_train))
+train_idx, valid_idx = indices[split:], indices[:split]
+
+# define samplers for obtaining training and validation batches
+train_sampler = SubsetRandomSampler(train_idx)
+valid_sampler = SubsetRandomSampler(valid_idx)
+
+# prepare data loaders for training, validation and test
+train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, 
+                                            sampler=train_sampler, num_workers=num_workers)
+valid_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, 
+                                           sampler=valid_sampler, num_workers=num_workers)
+test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, num_workers=num_workers)
 
 
 if False:   
@@ -91,16 +107,19 @@ criterion = nn.CrossEntropyLoss()                           # specify loss funct
 optimizer = torch.optim.SGD(model.parameters(), lr=0.01)    # specify optimizer (stochastic gradient descent) and learning rate = 0.01
 
 n_epochs = 50 # number of epochs to train the model
-model.train() # prep model for training
+valid_loss_min = np.Inf # initialize tracker for minimum validation loss
+                        # set initial "min" to infinity
 
 for epoch in range(n_epochs):
     # monitor training loss
     train_loss = 0.0
+    valid_loss = 0.0
     
     ###################
     # train the model #
     ###################
-    for data, target in train_loader: # batch loop
+    model.train() # prep model for training
+    for data, target in train_loader:
         # clear the gradients of all optimized variables
         optimizer.zero_grad()
         # forward pass: compute predicted outputs by passing inputs to the model
@@ -112,27 +131,49 @@ for epoch in range(n_epochs):
         # perform a single optimization step (parameter update)
         optimizer.step()
         # update running training loss
-        train_loss += loss.item()*data.size(0) # data.size(0) is the size of the batch
-             
-    # print training statistics 
+        train_loss += loss.item()
+        
+    ######################    
+    # validate the model #
+    ######################
+    model.eval() # prep model for evaluation
+    for data, target in valid_loader:
+        # forward pass: compute predicted outputs by passing inputs to the model
+        output = model(data)
+        # calculate the loss
+        loss = criterion(output, target)
+        # update running validation loss 
+        valid_loss += loss.item()
+        
+    # print training/validation statistics 
     # calculate average loss over an epoch
-    train_loss = train_loss/len(train_loader.dataset)
-
-    print('Epoch: {} \tTraining Loss: {:.6f}'.format(
+    train_loss = train_loss/len(train_loader)
+    valid_loss = valid_loss/len(valid_loader)
+    
+    print('Epoch: {} \tTraining Loss: {:.6f} \tValidation Loss: {:.6f}'.format(
         epoch+1, 
-        train_loss
+        train_loss,
+        valid_loss
         ))
+    
+    # save model if validation loss has decreased
+    if valid_loss <= valid_loss_min:
+        print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(
+        valid_loss_min,
+        valid_loss))
+        torch.save(model.state_dict(), 'model.pt')
+        valid_loss_min = valid_loss
     
 
 ######################
 #      TEST STEP     #
 ######################
-    # initialize lists to monitor test loss and accuracy
+# initialize lists to monitor test loss and accuracy
 test_loss = 0.0
 class_correct = list(0. for i in range(10))
 class_total = list(0. for i in range(10))
 
-model.eval() # prep model for training
+model.eval() # prep model for evaluation
 
 for data, target in test_loader:
     # forward pass: compute predicted outputs by passing inputs to the model
