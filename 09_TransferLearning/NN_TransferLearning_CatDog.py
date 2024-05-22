@@ -79,43 +79,43 @@ def main():
     steps = 0
     running_loss = 0
     print_every = 5
-    for epoch in range(epochs):
-        for inputs, labels in trainloader:
+    for epoch in range(epochs):                 # Loop on epochs
+        for inputs, labels in trainloader:      # Loop on data
             steps += 1
             # Move input and label tensors to the default device (GPU if availabre)
             inputs, labels = inputs.to(device), labels.to(device)
 
-            logps = model.forward(inputs)          # Forward Pass: Compute the output of the model
+            logps = model.forward(inputs)          # Forward Pass: Compute the output of the model || logps is a Log Probability
             loss = criterion(logps, labels)        # Calculate the loss using the model's output and the true labels
 
             optimizer.zero_grad()   # Reset gradient
             loss.backward()         # Backpropagate :: Calculate gradients
             optimizer.step()        # Update model parameters
 
-            running_loss += loss.item()
+            running_loss += loss.item()     # Keep track un loos
 
-            if steps % print_every == 1:
+            if steps % print_every == 1:    # Test model
                 test_loss = 0
                 accuracy = 0
-                model.eval()  # Set the model to evaluation mode 
+                model.eval()  # Set the model to evaluation mode // Use it to make predictions
                 with torch.no_grad():
-                    for inputs, labels in testloader:
+                    for inputs, labels in testloader:   # Access test data
                         inputs, labels = inputs.to(device), labels.to(device)
-                        logps = model.forward(inputs)
+                        logps = model.forward(inputs)   # Model restunds log soft max :: Log Probabilities
                         batch_loss = criterion(logps, labels)
                         
                         test_loss += batch_loss.item()
                         
                         # Calculate accuracy
-                        ps = torch.exp(logps)
-                        top_p, top_class = ps.topk(1, dim=1)
-                        equals = top_class == labels.view(*top_class.shape)
-                        accuracy += torch.mean(equals.type(torch.FloatTensor)).item()
+                        ps = torch.exp(logps)                                   # Get Probability from Log Probabilities
+                        top_p, top_class = ps.topk(1, dim=1)                    # Get the class with the largest probability
+                        equals = top_class == labels.view(*top_class.shape)     # Check for equality with the labels
+                        accuracy += torch.mean(equals.type(torch.FloatTensor)).item() # Use the aquality to calculate the accuracy
                         
                 print(f"Epoch {epoch+1}/{epochs}.. "
-                    f"Train loss: {running_loss/print_every:.3f}.. "
-                    f"Test loss: {test_loss/len(testloader):.3f}.. "
-                    f"Test accuracy: {accuracy/len(testloader):.3f}")
+                    f"Train loss: {running_loss/print_every:.3f}.. "        # Average training loss
+                    f"Test loss: {test_loss/len(testloader):.3f}.. "        # Average among all batches
+                    f"Test accuracy: {accuracy/len(testloader):.3f}")       # Average among all batches
                 running_loss = 0
                 model.train() # Set the model back to training mode
 
